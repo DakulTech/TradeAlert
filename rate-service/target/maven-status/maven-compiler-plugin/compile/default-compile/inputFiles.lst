@@ -1,0 +1,13 @@
+C:\Users\DELL\Documents\GitHub\TradeAlert\rate-service\src\main\java\com\tradealert\rateservice\controller\RateController.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\rate-service\src\main\java\com\tradealert\rateservice\dto\RateDTO.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\rate-service\src\main\java\com\tradealert\rateservice\events\RateEvent.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\rate-service\src\main\java\com\tradealert\rateservice\health\RateApiHealthIndicator.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\rate-service\src\main\java\com\tradealert\rateservice\model\Rate.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\rate-service\src\main\java\com\tradealert\rateservice\producer\RateProducer.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\rate-service\src\main\java\com\tradealert\rateservice\RateServiceApplication.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\rate-service\src\main\java\com\tradealert\rateservice\repository\RateRepository.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\rate-service\src\main\java\com\tradealert\rateservice\route\RateRoutes.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\rate-service\src\main\java\com\tradealert\rateservice\security\JwtAuthFilter.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\rate-service\src\main\java\com\tradealert\rateservice\security\JwtUtil.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\rate-service\src\main\java\com\tradealert\rateservice\security\SecurityConfig.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\rate-service\src\main\java\com\tradealert\rateservice\service\RateService.java

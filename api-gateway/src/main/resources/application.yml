@@ -1,0 +1,62 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: api-gateway
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+  cloud:
+    gateway:
+      default-filters:
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 10
+            redis-rate-limiter.burstCapacity: 20
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+      routes:
+        - id: user-service
+          uri: http://user-service:8080
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - JwtAuthFilter
+        - id: verification-service
+          uri: http://verification-service:8085
+          predicates:
+            - Path=/api/verify/**
+          filters:
+            - JwtAuthFilter
+        - id: alert-service
+          uri: http://alert-service:8084
+          predicates:
+            - Path=/api/alerts/**
+          filters:
+            - JwtAuthFilter
+        - id: rate-service
+          uri: http://rate-service:8082
+          predicates:
+            - Path=/api/rates/**
+          filters:
+            - JwtAuthFilter
+        - id: notification-service
+          uri: http://notification-service:8083
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - JwtAuthFilter
+
+jwt:
+  secret: ${JWT_SECRET:defaultSecretKey}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus

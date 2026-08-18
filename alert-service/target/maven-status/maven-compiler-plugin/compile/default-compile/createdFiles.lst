@@ -1,0 +1,16 @@
+com\tradealert\alertservice\security\SecurityConfig.class
+com\tradealert\alertservice\controller\AlertController.class
+com\tradealert\alertservice\events\AlertTriggeredEvent.class
+com\tradealert\alertservice\events\RateEvent.class
+com\tradealert\alertservice\model\User.class
+com\tradealert\alertservice\service\AlertService.class
+com\tradealert\alertservice\config\TelemetryConfig.class
+com\tradealert\alertservice\consumer\RateConsumer.class
+com\tradealert\alertservice\AlertServiceApplication.class
+com\tradealert\alertservice\model\CurrencyPair.class
+com\tradealert\alertservice\security\JwtAuthFilter.class
+com\tradealert\alertservice\observability\LoggingAspect.class
+com\tradealert\alertservice\model\Alert.class
+com\tradealert\alertservice\route\AlertRoutes.class
+com\tradealert\alertservice\security\JwtUtil.class
+com\tradealert\alertservice\repository\AlertRepository.class

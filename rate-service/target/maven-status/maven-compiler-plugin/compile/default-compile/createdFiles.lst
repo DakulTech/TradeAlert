@@ -1,0 +1,13 @@
+com\tradealert\rateservice\health\RateApiHealthIndicator.class
+com\tradealert\rateservice\model\Rate.class
+com\tradealert\rateservice\dto\RateDTO.class
+com\tradealert\rateservice\events\RateEvent.class
+com\tradealert\rateservice\repository\RateRepository.class
+com\tradealert\rateservice\security\JwtAuthFilter.class
+com\tradealert\rateservice\security\JwtUtil.class
+com\tradealert\rateservice\security\SecurityConfig.class
+com\tradealert\rateservice\service\RateService.class
+com\tradealert\rateservice\producer\RateProducer.class
+com\tradealert\rateservice\route\RateRoutes.class
+com\tradealert\rateservice\controller\RateController.class
+com\tradealert\rateservice\RateServiceApplication.class

@@ -1,0 +1,21 @@
+openapi: 3.0.0
+info:
+  title: Notification Model
+  version: 1.0.0
+components:
+  schemas:
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        message:
+          type: string
+        channel:
+          type: string
+          enum: [EMAIL, SMS, PUSH]
+        sentAt:
+          type: string
+          format: date-time

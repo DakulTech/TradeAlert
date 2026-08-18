@@ -1,0 +1,13 @@
+C:\Users\DELL\Documents\GitHub\TradeAlert\verification-service\src\main\java\com\tradealert\verificationservice\config\KafkaConsumerConfig.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\verification-service\src\main\java\com\tradealert\verificationservice\config\KafkaProducerConfig.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\verification-service\src\main\java\com\tradealert\verificationservice\config\TelemetryConfig.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\verification-service\src\main\java\com\tradealert\verificationservice\consumer\UserEventConsumer.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\verification-service\src\main\java\com\tradealert\verificationservice\controller\VerificationController.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\verification-service\src\main\java\com\tradealert\verificationservice\events\UserRegisteredEvent.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\verification-service\src\main\java\com\tradealert\verificationservice\events\VerificationCompletedEvent.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\verification-service\src\main\java\com\tradealert\verificationservice\observability\ObservabilityConfig.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\verification-service\src\main\java\com\tradealert\verificationservice\observability\VerificationMetrics.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\verification-service\src\main\java\com\tradealert\verificationservice\route\VerificationRoutes.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\verification-service\src\main\java\com\tradealert\verificationservice\service\EmailSender.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\verification-service\src\main\java\com\tradealert\verificationservice\service\VerificationProcessor.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\verification-service\src\main\java\com\tradealert\verificationservice\VerificationServiceApplication.java

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: smtp-secret
+  namespace: tradealert
+type: Opaque
+stringData:
+  smtp_user: "user@example.com"
+  smtp_pass: "changeme"

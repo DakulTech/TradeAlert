@@ -1,0 +1,16 @@
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\AlertServiceApplication.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\config\TelemetryConfig.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\consumer\RateConsumer.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\controller\AlertController.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\events\AlertTriggeredEvent.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\events\RateEvent.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\model\Alert.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\model\CurrencyPair.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\model\User.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\observability\LoggingAspect.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\repository\AlertRepository.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\route\AlertRoutes.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\security\JwtAuthFilter.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\security\JwtUtil.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\security\SecurityConfig.java
+C:\Users\DELL\Documents\GitHub\TradeAlert\alert-service\src\main\java\com\tradealert\alertservice\service\AlertService.java

@@ -1,0 +1,23 @@
+openapi: 3.0.0
+info:
+  title: Alert Model
+  version: 1.0.0
+components:
+  schemas:
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        currencyPair:
+          type: string
+        threshold:
+          type: number
+        direction:
+          type: string
+          enum: [ABOVE, BELOW]
+        createdAt:
+          type: string
+          format: date-time

@@ -1,0 +1,2 @@
+com\tradealert\apigateway\ApiGatewayApplication.class
+com\tradealert\apigateway\security\JwtAuthFilter.class

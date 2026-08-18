@@ -1,0 +1,22 @@
+openapi: 3.0.0
+info:
+  title: Verification Model
+  version: 1.0.0
+components:
+  schemas:
+    VerificationRequest:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        type:
+          type: string
+          enum: [EMAIL, SMS]
+        status:
+          type: string
+          enum: [PENDING, VERIFIED, FAILED]
+        createdAt:
+          type: string
+          format: date-time

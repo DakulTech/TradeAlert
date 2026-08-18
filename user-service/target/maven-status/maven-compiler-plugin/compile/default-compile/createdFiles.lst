@@ -1,0 +1,11 @@
+com\tradealert\userservice\security\SecurityConfig.class
+com\tradealert\userservice\security\JwtAuthFilter.class
+com\tradealert\userservice\observability\ObservabilityConfig.class
+com\tradealert\userservice\repository\UserRepository.class
+com\tradealert\userservice\model\User.class
+com\tradealert\userservice\security\JwtUtil.class
+com\tradealert\userservice\controller\AuthController.class
+com\tradealert\userservice\UserServiceApplication.class
+com\tradealert\userservice\event\UserRegisteredEvent.class
+com\tradealert\userservice\route\UserRoutes.class
+com\tradealert\userservice\service\AuthService.class

@@ -1,0 +1,18 @@
+openapi: 3.0.0
+info:
+  title: Rate Model
+  version: 1.0.0
+components:
+  schemas:
+    Rate:
+      type: object
+      properties:
+        id:
+          type: string
+        currencyPair:
+          type: string
+        value:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
