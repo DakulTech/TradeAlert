@@ -481,7 +481,14 @@ Ping messages are sent to:
 
 ## Observability
 
-Each service exposes Spring Boot Actuator endpoints where configured:
+TradeAlert uses two complementary telemetry layers:
+
+- **Micrometer metrics** measure counts, rates, and latency for Prometheus.
+- **OpenTelemetry spans** show the path of a request or event across provider calls, Kafka, PostgreSQL, Redis, authentication, and WebSocket delivery.
+
+The services use `opentelemetry-api`, Micrometer, and the Prometheus registry. These dependencies create telemetry in the application, but traces are exported only when an OpenTelemetry Java agent or SDK exporter is configured at runtime. Without an exporter, the application still runs and metrics remain available where Actuator is enabled.
+
+Actuator endpoints are exposed where configured:
 
 ```text
 /actuator/health
@@ -489,16 +496,74 @@ Each service exposes Spring Boot Actuator endpoints where configured:
 /actuator/prometheus
 ```
 
-Useful counters include:
+Important metrics include:
 
 ```text
+gateway_authenticated_requests_total
+gateway_auth_rejections_total
+rate_provider_failures_total
+rate_provider_fallbacks_total
+rate_provider_latency
+rates_ingested_total
+rate_event_publish_failures_total
+rate_events_consumed_total
 alerts_created_total
 alerts_triggered_total
+alert_publish_failures_total
+registrations_total
+logins_successful_total
+logins_failed_total
+logouts_total
+verifications_sent_total
+verifications_confirmed_total
+verifications_failed_total
+notification_events_consumed_total
 notifications_delivered_total
 notifications_queued_total
 notifications_replayed_total
 notifications_failed_total
-logins_failed_total
+websocket_connections_total
+websocket_disconnections_total
+```
+
+Important span names include:
+
+```text
+gateway.authenticate_request
+rate.fetch_and_ingest
+rate.provider_call
+rate.ingest
+rate.publish_event
+alert.consume_rate
+verification.consume_user_registered
+verification.send_email
+verification.confirm_request
+notification.consume_alert
+notification.send_or_queue
+notification.replay_pending
+notification.websocket_connect
+notification.websocket_disconnect
+```
+
+For production trace export, attach the OpenTelemetry Java agent to each service and configure an OTLP collector or compatible backend. Prometheus can scrape the metrics endpoint independently of trace export:
+
+```powershell
+java -javaagent:/opt/opentelemetry-javaagent.jar `
+  -Dotel.service.name=rate-service `
+  -Dotel.exporter.otlp.endpoint=http://otel-collector:4317 `
+  -jar rate-service.jar
+```
+
+Use dashboards and alerts for counters and latency. Use traces for a single request or event journey, such as:
+
+```text
+gateway.authenticate_request
+  -> rate.fetch_and_ingest
+  -> rate.provider_call
+  -> rate.publish_event
+  -> alert.consume_rate
+  -> notification.consume_alert
+  -> notification.send_or_queue
 ```
 
 ## Repository Layout

@@ -5,6 +5,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
 import com.tradealert.verificationservice.observability.VerificationMetrics;
 import com.tradealert.verificationservice.events.UserRegisteredEvent;
 import java.util.UUID;
@@ -17,13 +20,16 @@ public class VerificationProcessor {
     private final RedisTemplate<String, String> redisTemplate;
     private final EmailSender emailSender;
     private final VerificationMetrics metrics;
+    private final Tracer tracer;
 
     public VerificationProcessor(RedisTemplate<String, String> redisTemplate,
             EmailSender emailSender,
-            VerificationMetrics metrics) {
+            VerificationMetrics metrics,
+            Tracer tracer) {
         this.redisTemplate = redisTemplate;
         this.emailSender = emailSender;
         this.metrics = metrics;
+        this.tracer = tracer;
     }
 
     @KafkaListener(topics = "user-registered", groupId = "verification-service")
@@ -32,7 +38,10 @@ public class VerificationProcessor {
     }
 
     public void sendVerification(UserRegisteredEvent event) {
-        try {
+        Span span = tracer.spanBuilder("verification.send_email").startSpan();
+        try (var scope = span.makeCurrent()) {
+            span.setAttribute("user.id", event.getUserId());
+            span.setAttribute("user.email", event.getEmail());
             String token = UUID.randomUUID().toString();
             String key = "verify:token:" + token;
 
@@ -46,27 +55,42 @@ public class VerificationProcessor {
                             + verificationLink + "\n\nThanks!");
 
             metrics.incrementSent();
-            log.info("Verification email sent to {} with token {}", event.getEmail(), token);
+            span.addEvent("verification_email_sent");
         } catch (Exception e) {
             metrics.incrementFailed();
+            span.recordException(e);
+            span.setStatus(StatusCode.ERROR, "Verification email failed");
             log.error("Failed to send verification email to {}: {}", event.getEmail(), e.getMessage(), e);
+        } finally {
+            span.end();
         }
     }
 
     public boolean confirmVerification(Long userId, String token) {
-        String key = "verify:token:" + token;
-        String storedUserId = redisTemplate.opsForValue().get(key);
+        Span span = tracer.spanBuilder("verification.confirm").startSpan();
+        try (var scope = span.makeCurrent()) {
+            span.setAttribute("user.id", userId);
+            String key = "verify:token:" + token;
+            String storedUserId = redisTemplate.opsForValue().get(key);
 
-        if (storedUserId != null && storedUserId.equals(userId.toString())) {
+            if (storedUserId != null && storedUserId.equals(userId.toString())) {
 
-            redisTemplate.delete(key);
-            metrics.incrementConfirmed();
-            log.info("User {} verified successfully", userId);
-            return true;
-        } else {
-            metrics.incrementFailed();
-            log.warn("Verification failed for user {} with token {}", userId, token);
-            return false;
+                redisTemplate.delete(key);
+                metrics.incrementConfirmed();
+                span.addEvent("verification_confirmed");
+                return true;
+            } else {
+                metrics.incrementFailed();
+                span.setStatus(StatusCode.ERROR, "Invalid or expired verification token");
+                span.addEvent("verification_token_invalid_or_expired");
+                return false;
+            }
+        } catch (Exception exception) {
+            span.recordException(exception);
+            span.setStatus(StatusCode.ERROR, "Verification confirmation failed");
+            throw new IllegalStateException("Verification confirmation failed", exception);
+        } finally {
+            span.end();
         }
     }
 }

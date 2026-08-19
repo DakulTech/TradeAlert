@@ -6,6 +6,7 @@ import com.tradealert.alertservice.model.Alert;
 import com.tradealert.alertservice.repository.AlertRepository;
 import com.tradealert.alertservice.service.AlertService;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -28,6 +29,8 @@ public class RateConsumer {
     private final KafkaTemplate<String, AlertTriggeredEvent> kafkaTemplate;
     private final Tracer tracer;
     private final Counter alertsTriggeredCounter;
+    private final Counter rateEventsConsumedCounter;
+    private final Counter alertPublishFailuresCounter;
 
     public RateConsumer(AlertRepository alertRepository,
             AlertService alertService,
@@ -41,12 +44,21 @@ public class RateConsumer {
         this.alertsTriggeredCounter = Counter.builder("alerts_triggered_total")
                 .description("Total alerts triggered")
                 .register(meterRegistry);
+        this.rateEventsConsumedCounter = Counter.builder("rate_events_consumed_total")
+                .description("Rate events consumed by the alert service")
+                .register(meterRegistry);
+        this.alertPublishFailuresCounter = Counter.builder("alert_publish_failures_total")
+                .description("Alert events that failed to publish")
+                .register(meterRegistry);
     }
 
     @KafkaListener(topics = "rates", groupId = "alert-service")
     public void consumeRate(RateEvent rateEvent) {
-        Span span = tracer.spanBuilder("consumeRate").startSpan();
-        try {
+        Span span = tracer.spanBuilder("alert.consume_rate").startSpan();
+        try (var scope = span.makeCurrent()) {
+            rateEventsConsumedCounter.increment();
+            span.setAttribute("currency_pair", rateEvent.getCurrencyPair());
+            span.setAttribute("rate", rateEvent.getRate().doubleValue());
             log.info("Processing rate event for {}", rateEvent.getCurrencyPair());
 
             List<Alert> alerts = alertRepository.findActiveAlerts(rateEvent.getCurrencyPair(), rateEvent.getRate());
@@ -64,7 +76,14 @@ public class RateConsumer {
                 triggeredEvent.setTriggeredAt(Instant.now());
 
                 // Publish to Kafka
-                kafkaTemplate.send("alerts", triggeredEvent);
+                try {
+                    kafkaTemplate.send("alerts", triggeredEvent);
+                } catch (Exception publishException) {
+                    alertPublishFailuresCounter.increment();
+                    span.recordException(publishException);
+                    span.setStatus(StatusCode.ERROR, "Alert event publication failed");
+                    throw publishException;
+                }
                 alertsTriggeredCounter.increment();
 
                 log.info("Triggered alert {} for user {} on {} at rate {}",
@@ -76,6 +95,7 @@ public class RateConsumer {
         } catch (Exception ex) {
             log.error("Error processing rate event {}: {}", rateEvent, ex.getMessage(), ex);
             span.recordException(ex);
+            span.setStatus(StatusCode.ERROR, "Rate event processing failed");
         } finally {
             span.end();
         }

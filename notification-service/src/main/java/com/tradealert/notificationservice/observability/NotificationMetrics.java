@@ -11,6 +11,7 @@ public class NotificationMetrics {
     private final Counter queuedCounter;
     private final Counter replayedCounter;
     private final Counter failedCounter;
+    private final Counter consumedCounter;
 
     public NotificationMetrics(MeterRegistry meterRegistry) {
         this.deliveredCounter = Counter.builder("notifications_delivered_total")
@@ -24,6 +25,9 @@ public class NotificationMetrics {
                 .register(meterRegistry);
         this.failedCounter = Counter.builder("notifications_failed_total")
                 .description("Total number of failed notifications")
+                .register(meterRegistry);
+        this.consumedCounter = Counter.builder("notification_events_consumed_total")
+                .description("Alert events consumed by the notification service")
                 .register(meterRegistry);
     }
 
@@ -41,5 +45,9 @@ public class NotificationMetrics {
 
     public void incrementFailed() {
         failedCounter.increment();
+    }
+
+    public void incrementConsumed() {
+        consumedCounter.increment();
     }
 }
