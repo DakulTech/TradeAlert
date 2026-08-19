@@ -4,8 +4,8 @@ server:
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5433/tradealert
-    username: postgres
-    password: 'Dhakool1$'
+    username: ${DB_USERNAME:tradealert}
+    password: ${DB_PASSWORD:change-me}
   jpa:
     hibernate:
       ddl-auto: update

@@ -1,0 +1,25 @@
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+
+# Kubernetes secrets and certificates
+common/config/*secret*.yaml
+common/config/scecret-smtp.yaml
+!common/config/*secret*.example.yaml
+
+# Maven and Java build output
+**/target/
+*.jar
+*.war
+
+# Logs and JVM crash reports
+*.log
+*.txt
+hs_err_pid*
+replay_pid*
+
+# IDE and local tooling
+.vscode/
+.idea/
+*.iml

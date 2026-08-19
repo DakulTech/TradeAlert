@@ -2,14 +2,14 @@
 FROM maven:3.9.6-eclipse-temurin-21 AS builder
 
 WORKDIR /app
+ENV MAVEN_OPTS="-Djdk.tls.client.protocols=TLSv1.2 -Dhttps.protocols=TLSv1.2"
 
-# Copy pom.xml and download dependencies first (for caching)
+# Copy the POM first so dependency resolution remains cacheable.
 COPY pom.xml .
-RUN mvn dependency:go-offline
 
 # Copy source code and build
 COPY src ./src
-RUN mvn clean package -DskipTests
+RUN for attempt in 1 2 3 4 5; do mvn -B -ntp clean package -Dmaven.test.skip=true && exit 0; echo "Maven package failed; retrying ($attempt/5)" >&2; done; exit 1
 
 # Stage 2: Run the application
 FROM eclipse-temurin:21-jre-alpine

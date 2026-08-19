@@ -5,8 +5,8 @@ spring:
 smtp:
   host: ${SMTP_HOST:smtp.gmail.com}
   port: ${SMTP_PORT:587}
-  user: ${SMTP_USER:uthmanbusayomi@gmail.com}
-  pass: ${SMTP_PASS:bfcm jeeh opdr iof}
+  user: ${SMTP_USER:change-me}
+  pass: ${SMTP_PASS:change-me}
 
 
 management:
