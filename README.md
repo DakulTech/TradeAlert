@@ -23,9 +23,9 @@ API Gateway :8081
   `-- Notification Service :8083  WebSocket delivery and offline replay
 
 PostgreSQL  durable users, alerts, and rates
-Redis       sessions, rate limiting, verification tokens, offline queue
+Redis       sessions, rate limiting, verification tokens, shared presence, offline queue
 Kafka       user-registered -> verification
-            rates            -> alert evaluation
+            rates[key=currencyPair] -> alert evaluation
             alerts           -> notification delivery
 ```
 
@@ -390,9 +390,10 @@ The event path is:
 2. Rate Service publishes RateEvent to Kafka topic: rates.
 3. Alert Service consumes the rate event.
 4. Alert Service finds active matching alerts.
-5. The matching alert is marked notified=true.
-6. Alert Service publishes AlertTriggeredEvent to Kafka topic: alerts.
-7. Notification Service consumes the event.
+5. Alert Service atomically claims the alert with `WHERE notified = false`.
+6. A claim that updates zero rows is skipped because another consumer already claimed it.
+7. The winning consumer publishes AlertTriggeredEvent to Kafka topic: alerts.
+8. Notification Service consumes the event.
 ```
 
 The event contains the alert ID, user ID, currency pair, target rate, triggered rate, and trigger timestamp.
@@ -459,12 +460,33 @@ The once-only path is enforced at alert state level:
 ```text
 active alert
   -> matching rate
-  -> notified=true
+  -> atomic UPDATE ... WHERE notified=false
+  -> one successful claim
   -> one AlertTriggeredEvent
   -> one immediate delivery or one offline queue entry
 ```
 
-The `notified` flag prevents the same active alert from being selected again after it has triggered. Kafka consumer groups provide a stable consumer identity, while Redis preserves offline events until replay. Clients should subscribe once per user session and acknowledge their own UI state without duplicating messages.
+The initial candidate read and the notification claim are separate operations, so the claim itself is the correctness boundary. The repository executes a conditional update:
+
+```sql
+UPDATE alerts
+SET notified = true, triggered_at = :triggeredAt
+WHERE id = :id AND notified = false;
+```
+
+Exactly one concurrent consumer can update the row. A result of `1` permits event publication; a result of `0` means another consumer already claimed the alert. Kafka rate events are keyed by `currencyPair`, which pins ticks for the same pair to one partition and preserves their order within the alert-service consumer group. The atomic database claim remains the final defense against duplicate processing during retries or overlapping consumers.
+
+Clients should subscribe once per user session and acknowledge their own UI state without duplicating messages.
+
+### Shared presence across notification instances
+
+Notification Service stores WebSocket presence in Redis rather than process memory:
+
+```text
+presence:<userId> -> Redis SET of WebSocket session IDs
+```
+
+On connect, the instance adds its session ID and applies a five-minute TTL. On disconnect, it removes only that session ID and deletes the key when no sessions remain. Every notification-service instance reads the same Redis set, so a user connected to instance A is recognized as online when an alert is consumed by instance B. Multiple tabs and connections are supported without one disconnect incorrectly marking the user offline.
 
 ## Notification Utility Endpoints
 
@@ -627,6 +649,7 @@ TradeAlert favors durable alert state and reliable notification handling while a
 | Five-second provider timeout | A slow external API does not block a request indefinitely. | A slow provider may be abandoned while it could eventually have responded. |
 | Kafka topics | Rate and alert events remain decoupled when a consumer is restarting. | Notification delivery is asynchronous and may be delayed by consumer lag. |
 | Redis offline queue | Disconnected users can receive pending alerts after reconnecting. | Redis is an operational dependency; a Redis outage prevents queueing until it recovers. |
+| Redis shared presence | Every notification-service instance can see connections owned by another instance. | Presence is TTL-based; a crashed instance may leave a user marked online until the five-minute key expires. |
 | Docker restart policies and health checks | Failed containers can restart automatically. | Restarting a process does not replace database, broker, or provider high availability. |
 
 ### Consistency choices
@@ -634,7 +657,8 @@ TradeAlert favors durable alert state and reliable notification handling while a
 | Approach | Consistency benefit | Cost or limitation |
 | --- | --- | --- |
 | PostgreSQL for users, alerts, and rates | Alert state and persisted rates survive process restarts and support transactional updates. | Cross-service changes are not one distributed transaction. |
-| `notified` alert state | A matching active alert is marked before its Kafka event is emitted, preventing repeated selection of the same alert. | A failure after marking and before event publication needs operational reconciliation or an outbox pattern for stronger guarantees. |
+| Atomic alert claim | A conditional `UPDATE ... WHERE notified = false` lets exactly one concurrent consumer claim an alert. | A failure after claiming and before event publication needs reconciliation or an outbox pattern for stronger guarantees. |
+| Keyed rate events | `currencyPair` pins ticks for the same pair to one Kafka partition, preserving per-pair order. | A hot currency pair can concentrate traffic on one partition. |
 | Kafka consumer groups | Each service has a stable consumption identity and can resume from committed offsets. | The system is eventually consistent: an ingested rate is not visible to notification clients instantly. |
 | Redis queue replay | Pending notifications are replayed in list order and cleared after replay. | Redis queue delivery is not a substitute for a durable audit log or a transactional outbox. |
 | Provider failover without stale fallback | Alerts are never evaluated against an invented or silently stale current rate. | Both providers being down produces `503`, so current-rate availability is sacrificed to protect correctness. |
@@ -644,7 +668,7 @@ TradeAlert favors durable alert state and reliable notification handling while a
 The platform separates two kinds of data:
 
 1. **Durable decisions:** users, alert rules, alert state, and ingested rates belong in PostgreSQL.
-2. **Transport and delivery state:** Kafka carries events, while Redis holds sessions and short-lived offline notifications.
+2. **Transport and delivery state:** Kafka carries keyed events, while Redis holds sessions, shared presence, and short-lived offline notifications.
 
 This gives Rhema a predictable result: if a provider fails, the service tries another source; if both fail, it reports the outage instead of creating a false trigger; if the alert really triggers, the event is processed independently; and if Rhema is offline, the notification waits for her reconnect.
 

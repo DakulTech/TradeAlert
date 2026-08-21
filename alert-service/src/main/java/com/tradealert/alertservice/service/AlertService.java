@@ -48,9 +48,7 @@ public class AlertService {
     }
 
     @Transactional
-    public void markAsNotified(Alert alert) {
-        alert.setNotified(true);
-        alert.setTriggeredAt(Instant.now());
-        alertRepository.save(alert);
+    public boolean claimForNotification(Long alertId, Instant triggeredAt) {
+        return alertRepository.claimForNotification(alertId, triggeredAt) == 1;
     }
 }

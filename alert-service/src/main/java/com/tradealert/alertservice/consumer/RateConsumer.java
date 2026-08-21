@@ -63,8 +63,11 @@ public class RateConsumer {
 
             List<Alert> alerts = alertRepository.findActiveAlerts(rateEvent.getCurrencyPair(), rateEvent.getRate());
             for (Alert alert : alerts) {
-                // Mark as notified inside a transaction
-                alertService.markAsNotified(alert);
+                Instant triggeredAt = Instant.now();
+                if (!alertService.claimForNotification(alert.getId(), triggeredAt)) {
+                    span.addEvent("alert_claim_already_taken");
+                    continue;
+                }
 
                 // Build enriched event
                 AlertTriggeredEvent triggeredEvent = new AlertTriggeredEvent();
@@ -73,7 +76,7 @@ public class RateConsumer {
                 triggeredEvent.setCurrencyPair(alert.getCurrencyPair().getSymbol());
                 triggeredEvent.setTargetRate(alert.getTargetRate());
                 triggeredEvent.setTriggeredRate(rateEvent.getRate());
-                triggeredEvent.setTriggeredAt(Instant.now());
+                triggeredEvent.setTriggeredAt(triggeredAt);
 
                 // Publish to Kafka
                 try {

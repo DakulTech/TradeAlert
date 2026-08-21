@@ -30,7 +30,8 @@ public class RateProducer {
         Span span = tracer.spanBuilder("rate.publish_event").startSpan();
         try (var scope = span.makeCurrent()) {
             span.setAttribute("currency_pair", event.getCurrencyPair());
-            kafkaTemplate.send("rates", event).whenComplete((result, exception) -> {
+            // keys each message by currency pair to ensure ordering for the same pair
+            kafkaTemplate.send("rates", event.getCurrencyPair(), event).whenComplete((result, exception) -> {
                 if (exception != null) {
                     publishFailures.increment();
                     span.recordException(exception);
