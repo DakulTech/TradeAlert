@@ -1,13 +1,6 @@
 # TradeAlert
 
-TradeAlert monitors currency exchange rates and notifies users when a configured target is reached. It is built as a Java 21 and Spring Boot microservices platform with Kafka for event delivery, PostgreSQL for durable state, Redis for sessions and offline notifications, and WebSocket/STOMP for real-time delivery.
-
-## What It Guarantees
-
-- **One alert trigger:** an active alert is marked as notified before its alert event is published.
-- **Offline delivery:** notifications for disconnected users are stored in Redis and replayed after reconnect.
-- **Asynchronous processing:** rate ingestion, alert evaluation, and notification delivery are decoupled through Kafka.
-- **Independent scaling:** each service can be scaled according to its workload.
+TradeAlert monitors currency exchange rates and notifies Rhema when a configured target is reached. The application is a modular monolith built with Java 21 and Spring Boot. All business capabilities run in one application process and share one PostgreSQL database.
 
 ## Architecture
 
@@ -15,47 +8,57 @@ TradeAlert monitors currency exchange rates and notifies users when a configured
 Client
   |
   v
-API Gateway :8081
-  |-- User Service         :8080  authentication and sessions
-  |-- Verification Service :8085  email verification
-  |-- Rate Service         :8082  rate ingestion and lookup
-  |-- Alert Service        :8084  threshold evaluation
-  `-- Notification Service :8083  WebSocket delivery and offline replay
+TradeAlert application :8080
+  |-- identity       registration, login, logout, JWT
+  |-- verification   email verification and token confirmation
+  |-- rates          provider access, persistence, scheduled polling
+  |-- alerts         alert rules, matching, atomic trigger claims
+  `-- notifications  WebSocket delivery, presence, offline replay
 
-PostgreSQL  durable users, alerts, and rates
-Redis       sessions, rate limiting, verification tokens, shared presence, offline queue
-Kafka       user-registered -> verification
-            rates[key=currencyPair] -> alert evaluation
-            alerts           -> notification delivery
+PostgreSQL :5432      users, alerts, currency pairs, rates
+Redis :6379           sessions, verification tokens, presence, offline queues
+Prometheus :9090      application metrics
 ```
 
-## Services
+Kafka, ZooKeeper, the API Gateway, and PostgreSQL standby replication are not required by the monolith.
 
-| Service | Port | Responsibility |
-| --- | ---: | --- |
-| API Gateway | `8081` | Entry point, routing, JWT validation, rate limiting |
-| User Service | `8080` | Registration, login, logout, user state |
-| Rate Service | `8082` | Ingests and retrieves exchange rates |
-| Alert Service | `8084` | Stores alerts and evaluates thresholds |
-| Notification Service | `8083` | Sends WebSocket messages or queues them in Redis |
-| Verification Service | `8085` | Sends and confirms email verification tokens |
+## Why A Modular Monolith
+
+The current scope is one user, Rhema, with approximately 100 alerts. A single application keeps the domain boundaries clear without the operational cost of several deployable services, a message broker, broker coordination, and database replication.
+
+Modules communicate through direct service calls. They are organized as internal packages so they can be separated into services later if traffic or team ownership requires it.
+
+## Modules
+
+| Module | Responsibility |
+| --- | --- |
+| `identity` | Canonical `User` entity, registration, login, logout, JWT creation and validation |
+| `verification` | Redis-backed verification tokens, SMTP email, account confirmation |
+| `rates` | External provider failover, rate persistence, REST endpoints, scheduled polling |
+| `alerts` | Alert persistence, threshold matching, and atomic notification claims |
+| `notifications` | STOMP/WebSocket delivery, Redis presence, offline queueing, replay |
+| `security` | HTTP JWT authentication and endpoint authorization |
+
+The canonical user entity is [User.java](tradealert-app/src/main/java/com/tradealert/identity/model/User.java). It owns the `users` table and is referenced by alerts through `user_id`.
 
 ## Prerequisites
 
 - Docker Desktop with Docker Compose
-- Java 21 LTS for local Maven builds
-- Maven 3.13 or later, or the Maven Wrapper if added to the project
+- Java 21 LTS
+- Maven 3.9 or later for local builds
 
-Verify Java and Maven:
+Verify the local tools:
 
 ```powershell
 java -version
 mvn -v
+docker --version
+docker compose version
 ```
 
 ## Configuration
 
-Create a `.env` file at the repository root. Do not commit real credentials.
+Create a root `.env` file. Do not commit real credentials. The tracked [.env.example](.env.example) contains safe placeholders.
 
 ```dotenv
 DB_PASSWORD=change-me
@@ -64,81 +67,72 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=your-address@gmail.com
 SMTP_PASSWORD=your-gmail-app-password
-COMPOSE_PARALLEL_LIMIT=1
+RATE_CURRENCY_PAIRS=USD/NGN,EUR/USD
+RATE_POLLING_INTERVAL_MS=60000
 ```
 
-The services use these Docker Compose hostnames internally:
+Important settings:
 
-```text
-postgres-primary:5432
-kafka:9092
-redis:6379
-```
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DB_PASSWORD` | `tradealert123` in Compose | PostgreSQL password |
+| `JWT_SECRET` | development placeholder | JWT signing key; replace it |
+| `SMTP_HOST` | `smtp.gmail.com` | SMTP server |
+| `SMTP_PORT` | `587` | SMTP port |
+| `SMTP_USERNAME` | empty | SMTP account |
+| `SMTP_PASSWORD` | empty | SMTP app password |
+| `RATE_CURRENCY_PAIRS` | `USD/NGN,EUR/USD` in Compose | Comma-separated pairs to poll |
+| `RATE_POLLING_INTERVAL_MS` | `60000` in Compose | Polling delay in milliseconds |
 
-## Build and Run
+## Build And Run
 
-Build all six service images:
+Build and start PostgreSQL, Redis, the monolith, and Prometheus:
 
 ```powershell
-docker compose build --no-cache
-```
-
-If Docker Desktop reports `bad_record_mac`, `failed to stat parent`, or an overlayfs snapshot error, restart Docker Desktop, verify available disk space, and retry with Bake disabled:
-
-```powershell
-$env:COMPOSE_BAKE = "false"
-docker compose --parallel 1 build --no-cache
-```
-
-Start the platform:
-
-```powershell
-docker compose up -d
+docker compose up --build -d
 docker compose ps
 ```
 
-Stop the platform:
+The application is available at `http://localhost:8080`. Prometheus is available at `http://localhost:9090`.
+
+Stop the stack:
 
 ```powershell
 docker compose down
 ```
 
-## Health Checks
+Remove local database, Redis, and Prometheus data as well:
 
 ```powershell
-curl http://localhost:8080/actuator/health
-curl http://localhost:8081/actuator/health
-curl http://localhost:8082/actuator/health
-curl http://localhost:8083/actuator/health
-curl http://localhost:8084/actuator/health
-curl http://localhost:8085/actuator/health
+docker compose down -v
 ```
 
-Expected response from a healthy Spring Boot service:
+Build the application locally without tests:
 
-```json
-{
-  "status": "UP"
-}
+```powershell
+mvn -q -f tradealert-app/pom.xml clean compile
 ```
 
-Metrics are exposed at `/actuator/prometheus` where enabled. Prometheus is available at `http://localhost:9090`.
+## Health And Metrics
 
-## API Conventions
+```powershell
+Invoke-RestMethod http://localhost:8080/actuator/health
+Invoke-RestMethod http://localhost:8080/actuator/prometheus
+```
 
-Use the API Gateway at `http://localhost:8081` for client requests. Protected routes require:
+Prometheus scrapes `tradealert-app:8080/actuator/prometheus` every 10 seconds inside Compose.
+
+## API
+
+The monolith serves all client APIs directly on port `8080`. Protected endpoints require:
 
 ```http
 Authorization: Bearer <jwt>
 ```
 
-The examples below use PowerShell. Replace `$token`, `$userId`, and `$alertId` with values returned by the preceding request.
+### Authentication
 
-## Authentication and Verification
-
-### 1. Rhema registers
-
-The registration endpoint accepts a `User` JSON document. The password is stored as a BCrypt hash. Registration publishes a `user-registered` Kafka event for the Verification Service.
+Register Rhema:
 
 ```powershell
 $registration = @{
@@ -149,324 +143,135 @@ $registration = @{
   websocketNotifications = $true
 } | ConvertTo-Json
 
-$registrationResponse = Invoke-RestMethod `
+$token = Invoke-RestMethod `
   -Method Post `
-  -Uri "http://localhost:8081/api/auth/register" `
+  -Uri "http://localhost:8080/api/auth/register" `
   -ContentType "application/json" `
   -Body $registration
 
-$registrationResponse
+$headers = @{ Authorization = "Bearer $token" }
 ```
 
-Example output:
+Registration saves the user, creates a verification token in Redis, and sends the verification email directly through the internal verification module. No Kafka event is involved.
 
-```text
-eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwiaWF0IjoxNz...signature...
-```
-
-The returned value is a JWT. The new user is initially unverified.
-
-### 2. Verification email pattern
-
-The registration event is consumed asynchronously:
-
-```text
-User Service
-  -> Kafka: user-registered
-  -> Verification Service
-  -> Redis: verify:token:<token>, TTL 15 minutes
-  -> SMTP email to rhema@gmail.com
-```
-
-The email contains a link in this form:
-
-```text
-https://your-app.com/verify?userId=<userId>&token=<token>
-```
-
-The API endpoint that confirms the token is:
-
-```http
-GET /api/verify/confirm?userId=<userId>&token=<token>
-```
-
-Successful response:
-
-```text
-Verification successful for user 1
-```
-
-Expired or invalid token response:
-
-```text
-Invalid or expired verification token
-```
-
-The token is deleted from Redis after successful confirmation, so it cannot be reused.
-
-### 3. Rhema logs in
-
-Login uses `email` and `password` query parameters. Optional `device` and `location` values can be supplied for session context.
+Log in:
 
 ```powershell
 $token = Invoke-RestMethod `
   -Method Post `
-  -Uri "http://localhost:8081/api/auth/login?email=rhema%40gmail.com&password=RhemaPassword%2123&device=web&location=home"
+  -Uri "http://localhost:8080/api/auth/login?email=rhema%40gmail.com&password=RhemaPassword%2123&device=web&location=home"
 
 $headers = @{ Authorization = "Bearer $token" }
-$token
 ```
 
-Example output:
-
-```text
-eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwiaWF0IjoxNz...signature...
-```
-
-The User Service stores the active session in Redis under `session:<userId>`.
-
-### 4. Rhema logs out
+Log out:
 
 ```powershell
 Invoke-RestMethod `
   -Method Post `
-  -Uri "http://localhost:8081/api/auth/logout/$userId" `
+  -Uri "http://localhost:8080/api/auth/logout/1" `
   -Headers $headers
 ```
 
-Expected response:
+Endpoints:
 
-```text
-HTTP 204 No Content
-```
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/auth/register` | Create a user and send verification email |
+| `POST` | `/api/auth/login` | Authenticate with email and password |
+| `POST` | `/api/auth/logout/{userId}` | Remove the Redis session |
+| `GET` | `/api/verify/confirm?userId={id}&token={token}` | Confirm email verification |
 
-Logout removes the Redis session and failed-login counter. The client should also discard its JWT. The current gateway validates JWT signatures and expiration; immediate token revocation requires a token blacklist or equivalent gateway check.
+Verification tokens are stored under `verify:token:{token}` and expire after 15 minutes. Successful confirmation marks the canonical user as verified and deletes the token.
 
-## Rate and Alert Endpoints
+### Rates
 
-### Ingest a rate
-
-```http
-POST /api/rates/ingest?currencyPair=USD%2FEUR&rateValue=0.9500
-Authorization: Bearer <jwt>
-```
-
-PowerShell:
+Manually ingest a trusted rate:
 
 ```powershell
 $rate = Invoke-RestMethod `
   -Method Post `
-  -Uri "http://localhost:8081/api/rates/ingest?currencyPair=USD%2FEUR&rateValue=0.9500" `
+  -Uri "http://localhost:8080/api/rates/ingest?currencyPair=USD%2FNGN&rateValue=1500.25" `
   -Headers $headers
-
-$rate | ConvertTo-Json
 ```
 
-Example output:
+Fetch and ingest from the external providers:
 
-```json
-{
-  "id": 42,
-  "currencyPair": "USD/EUR",
-  "rate": 0.95,
-  "timestamp": "2026-08-19T12:00:00Z"
-}
+```powershell
+$rate = Invoke-RestMethod `
+  -Method Get `
+  -Uri "http://localhost:8080/api/rates/fetch/USD%2FNGN" `
+  -Headers $headers
 ```
 
-The rate is persisted and published to Kafka topic `rates`.
+The primary provider is tried first. If it fails or times out after five seconds, the secondary provider is tried. If both fail, the endpoint returns `503` and does not create a new rate.
 
-### Read rates
-
-| Method | Endpoint | Description |
+| Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/rates` | Return all stored rates |
-| `GET` | `/api/rates/fetch/{currencyPair}` | Fetch and ingest the latest provider rate |
-| `GET` | `/api/rates/health` | Check the rate provider |
+| `POST` | `/api/rates/ingest` | Persist a supplied rate and evaluate alerts |
+| `GET` | `/api/rates/fetch/{currencyPair}` | Fetch, persist, and evaluate a provider rate |
+| `GET` | `/api/rates` | List stored rates |
+| `GET` | `/api/rates/health` | Report provider health |
 
-### Graceful rate-provider failover
+### Scheduled Rate Polling
 
-`GET /api/rates/fetch/{currencyPair}` uses two external providers:
+The application enables Spring scheduling through `@EnableScheduling`. [RatePollingJob.java](tradealert-app/src/main/java/com/tradealert/rates/scheduler/RatePollingJob.java) polls every `RATE_POLLING_INTERVAL_MS` for each pair in `RATE_CURRENCY_PAIRS`.
+
+With the default Compose configuration:
 
 ```text
-1. Call the primary provider.
-2. Wait no longer than 5 seconds for a response.
-3. If the primary succeeds, use its rate.
-4. If the primary fails or times out, call the secondary provider.
-5. If the secondary succeeds, persist and publish its rate.
-6. If both providers fail, return HTTP 503 and do not publish a new rate.
+USD/NGN -> fetch -> persist -> evaluate alerts
+EUR/USD -> fetch -> persist -> evaluate alerts
+repeat every 60 seconds
 ```
 
-The service does not silently invent or reuse a rate when both providers are unavailable. This protects alert consistency: an alert must only be evaluated against a rate that was actually received from a provider or explicitly ingested by a trusted caller.
+The polling job does nothing when the currency-pair list is empty. This makes local startup safe when external rate providers are not configured.
 
-Example fallback response from the health endpoint:
+### Alerts
 
-```json
-{
-  "primaryApi": false,
-  "secondaryApi": true
-}
-```
-
-The rate service reports this state as `DEGRADED` through its Actuator health indicator. If both providers are down, the health state is `DOWN` and fetch requests return:
-
-```http
-HTTP 503 Service Unavailable
-```
-
-Previously persisted rates remain available through `GET /api/rates`. That endpoint is a historical read and does not pretend that an old value is a current provider value.
-
-### Create Rhema's alert
-
-An alert contains a user, currency pair, target rate, and direction. Direction is `ABOVE` or `BELOW`.
+Create an alert for Rhema:
 
 ```powershell
 $alertBody = @{
-  user = @{ id = $userId }
-  currencyPair = @{ symbol = "USD/EUR" }
-  targetRate = 0.9500
+  user = @{ id = 1 }
+  currencyPair = @{ symbol = "USD/NGN" }
+  targetRate = 1500.00
   direction = "ABOVE"
 } | ConvertTo-Json -Depth 4
 
 $alert = Invoke-RestMethod `
   -Method Post `
-  -Uri "http://localhost:8081/api/alerts" `
+  -Uri "http://localhost:8080/api/alerts" `
   -Headers $headers `
   -ContentType "application/json" `
   -Body $alertBody
-
-$alert | ConvertTo-Json -Depth 5
-$alertId = $alert.id
 ```
 
-Example output:
+`direction` must be `ABOVE` or `BELOW`. An alert is eligible only while `notified` is `false`.
 
-```json
-{
-  "id": 1001,
-  "targetRate": 0.95,
-  "direction": "ABOVE",
-  "notified": false,
-  "createdAt": "2026-08-19T12:01:00Z",
-  "triggeredAt": null
-}
-```
-
-Alert management endpoints:
-
-| Method | Endpoint | Description |
+| Method | Endpoint | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/alerts` | List alerts |
 | `POST` | `/api/alerts` | Create an alert |
 | `PUT` | `/api/alerts/{id}` | Update an alert |
 | `DELETE` | `/api/alerts/{id}` | Delete an alert |
 
-## Rhema's Complete Alert Journey
+## Alert And Notification Flow
 
-Assume Rhema created an `ABOVE` alert for `USD/EUR` at `0.9500`.
-
-### Before the target is reached
+A rate is evaluated synchronously inside the monolith:
 
 ```text
-Alert Service database:
-  targetRate = 0.9500
-  direction  = ABOVE
-  notified   = false
+scheduled poll or manual ingest
+  -> fetch provider rate when needed
+  -> save rate in PostgreSQL
+  -> find matching, unnotified alerts
+  -> atomically claim each alert
+  -> create AlertNotification
+  -> send over WebSocket when Rhema is online
+  -> otherwise append JSON to Redis pending:{userId}
 ```
 
-Rates below the target do not trigger the alert.
-
-### The rate reaches the target
-
-Rhema or a provider sends a new rate:
-
-```text
-POST /api/rates/ingest?currencyPair=USD%2FEUR&rateValue=0.9500
-```
-
-The event path is:
-
-```text
-1. Rate Service saves the rate in PostgreSQL.
-2. Rate Service publishes RateEvent to Kafka topic: rates.
-3. Alert Service consumes the rate event.
-4. Alert Service finds active matching alerts.
-5. Alert Service atomically claims the alert with `WHERE notified = false`.
-6. A claim that updates zero rows is skipped because another consumer already claimed it.
-7. The winning consumer publishes AlertTriggeredEvent to Kafka topic: alerts.
-8. Notification Service consumes the event.
-```
-
-The event contains the alert ID, user ID, currency pair, target rate, triggered rate, and trigger timestamp.
-
-### Rhema is online
-
-When Rhema has an active WebSocket connection, Notification Service sends the event immediately to:
-
-```text
-/topic/alerts/<userId>
-```
-
-The client connects to the notification service WebSocket/STOMP endpoint:
-
-```text
-ws://localhost:8083/ws/alerts
-```
-
-The client subscribes to:
-
-```text
-/topic/alerts/1
-```
-
-Example message:
-
-```json
-{
-  "alertId": 1001,
-  "userId": 1,
-  "currencyPair": "USD/EUR",
-  "targetRate": 0.95,
-  "triggeredRate": 0.95,
-  "triggeredAt": "2026-08-19T12:05:00Z"
-}
-```
-
-### Rhema is offline
-
-If Rhema is disconnected, Notification Service stores the event in Redis:
-
-```text
-pending:1 -> [<serialized AlertTriggeredEvent>]
-```
-
-No notification is discarded just because the WebSocket is unavailable. When Rhema reconnects, the pending events are replayed in order to `/topic/alerts/1`, then the Redis list is cleared.
-
-The replay endpoint is also available for clients that need to request it explicitly:
-
-```http
-POST /api/notifications/replay/{userId}
-```
-
-Example response:
-
-```text
-Pending notifications replayed for user 1
-```
-
-### Notification is received once
-
-The once-only path is enforced at alert state level:
-
-```text
-active alert
-  -> matching rate
-  -> atomic UPDATE ... WHERE notified=false
-  -> one successful claim
-  -> one AlertTriggeredEvent
-  -> one immediate delivery or one offline queue entry
-```
-
-The initial candidate read and the notification claim are separate operations, so the claim itself is the correctness boundary. The repository executes a conditional update:
+The atomic claim is:
 
 ```sql
 UPDATE alerts
@@ -474,43 +279,65 @@ SET notified = true, triggered_at = :triggeredAt
 WHERE id = :id AND notified = false;
 ```
 
-Exactly one concurrent consumer can update the row. A result of `1` permits event publication; a result of `0` means another consumer already claimed the alert. Kafka rate events are keyed by `currencyPair`, which pins ticks for the same pair to one partition and preserves their order within the alert-service consumer group. The atomic database claim remains the final defense against duplicate processing during retries or overlapping consumers.
+Only a claim that updates one row can produce a notification. This prevents repeated polling or concurrent requests from sending the same alert more than once.
 
-Clients should subscribe once per user session and acknowledge their own UI state without duplicating messages.
+## WebSocket Notifications
 
-### Shared presence across notification instances
-
-Notification Service stores WebSocket presence in Redis rather than process memory:
+Connect to:
 
 ```text
-presence:<userId> -> Redis SET of WebSocket session IDs
+ws://localhost:8080/ws/alerts
 ```
 
-On connect, the instance adds its session ID and applies a five-minute TTL. On disconnect, it removes only that session ID and deletes the key when no sessions remain. Every notification-service instance reads the same Redis set, so a user connected to instance A is recognized as online when an alert is consumed by instance B. Multiple tabs and connections are supported without one disconnect incorrectly marking the user offline.
+The WebSocket handshake requires:
 
-## Notification Utility Endpoints
+```http
+Authorization: Bearer <jwt>
+```
 
-| Method | Endpoint | Description |
+The JWT handshake interceptor validates the token and stores the user ID in the WebSocket session. The connection listener then records Redis presence under `presence:{userId}` and replays pending notifications.
+
+Subscribe to:
+
+```text
+/topic/alerts/1
+```
+
+Alert messages have this shape:
+
+```json
+{
+  "alertId": 1001,
+  "userId": 1,
+  "currencyPair": "USD/NGN",
+  "targetRate": 1500.0,
+  "triggeredRate": 1500.25,
+  "triggeredAt": "2026-08-27T12:05:00Z"
+}
+```
+
+When Rhema is offline, notifications are stored in the Redis list `pending:1`. On reconnect, they are replayed in list order and the queue is cleared.
+
+Utility endpoints:
+
+| Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/notifications/replay/{userId}` | Replay queued notifications |
-| `GET` | `/api/notifications/ping/{userId}` | Send a WebSocket ping event |
+| `POST` | `/api/notifications/replay/{userId}` | Replay pending notifications |
+| `GET` | `/api/notifications/ping/{userId}` | Send a WebSocket ping |
 
-Ping messages are sent to:
+## Redis Keys
 
-```text
-/topic/ping/<userId>
-```
+| Key | Purpose | Lifetime |
+| --- | --- | --- |
+| `session:{userId}` | Active login session | Until logout or replacement |
+| `login:failures:{userId}` | Failed-login tracking | Application controlled |
+| `verify:token:{token}` | Email verification token | 15 minutes |
+| `presence:{userId}` | Active WebSocket session IDs | Five minutes, refreshed on connect |
+| `pending:{userId}` | Offline notification queue | Until replayed |
 
 ## Observability
 
-TradeAlert uses two complementary telemetry layers:
-
-- **Micrometer metrics** measure counts, rates, and latency for Prometheus.
-- **OpenTelemetry spans** show the path of a request or event across provider calls, Kafka, PostgreSQL, Redis, authentication, and WebSocket delivery.
-
-The services use `opentelemetry-api`, Micrometer, and the Prometheus registry. These dependencies create telemetry in the application, but traces are exported only when an OpenTelemetry Java agent or SDK exporter is configured at runtime. Without an exporter, the application still runs and metrics remain available where Actuator is enabled.
-
-Actuator endpoints are exposed where configured:
+Actuator exposes:
 
 ```text
 /actuator/health
@@ -521,25 +348,13 @@ Actuator endpoints are exposed where configured:
 Important metrics include:
 
 ```text
-gateway_authenticated_requests_total
-gateway_auth_rejections_total
 rate_provider_failures_total
 rate_provider_fallbacks_total
 rate_provider_latency
 rates_ingested_total
-rate_event_publish_failures_total
-rate_events_consumed_total
-alerts_created_total
-alerts_triggered_total
-alert_publish_failures_total
-registrations_total
-logins_successful_total
-logins_failed_total
-logouts_total
 verifications_sent_total
 verifications_confirmed_total
 verifications_failed_total
-notification_events_consumed_total
 notifications_delivered_total
 notifications_queued_total
 notifications_replayed_total
@@ -548,132 +363,41 @@ websocket_connections_total
 websocket_disconnections_total
 ```
 
-Important span names include:
-
-```text
-gateway.authenticate_request
-rate.fetch_and_ingest
-rate.provider_call
-rate.ingest
-rate.publish_event
-alert.consume_rate
-verification.consume_user_registered
-verification.send_email
-verification.confirm_request
-notification.consume_alert
-notification.send_or_queue
-notification.replay_pending
-notification.websocket_connect
-notification.websocket_disconnect
-```
-
-For production trace export, attach the OpenTelemetry Java agent to each service and configure an OTLP collector or compatible backend. Prometheus can scrape the metrics endpoint independently of trace export:
-
-```powershell
-java -javaagent:/opt/opentelemetry-javaagent.jar `
-  -Dotel.service.name=rate-service `
-  -Dotel.exporter.otlp.endpoint=http://otel-collector:4317 `
-  -jar rate-service.jar
-```
-
-Use dashboards and alerts for counters and latency. Use traces for a single request or event journey, such as:
-
-```text
-gateway.authenticate_request
-  -> rate.fetch_and_ingest
-  -> rate.provider_call
-  -> rate.publish_event
-  -> alert.consume_rate
-  -> notification.consume_alert
-  -> notification.send_or_queue
-```
-
 ## Repository Layout
 
 ```text
 TradeAlert/
-|-- api-gateway/
-|-- user-service/
-|-- verification-service/
-|-- rate-service/
-|-- alert-service/
-|-- notification-service/
-|-- common/
-|   |-- config/       Kubernetes configuration
-|   |-- models/       OpenAPI model definitions
-|   `-- observability/
-|-- postgres/
+|-- tradealert-app/
+|   |-- src/main/java/com/tradealert/
+|   |   |-- identity/
+|   |   |-- verification/
+|   |   |-- rates/
+|   |   |-- alerts/
+|   |   |-- notifications/
+|   |   |-- security/
+|   |   `-- TradeAlertApplication.java
+|   |-- src/main/resources/application.yml
+|   |-- Dockerfile
+|   `-- pom.xml
+|-- common/                  Kubernetes and API model artifacts retained for reference
+|-- postgres/                Legacy replication scripts, no longer used by Compose
 |-- docker-compose.yml
-`-- prometheus.yml
+|-- prometheus.yml
+`-- .env.example
 ```
 
-## Development Commands
+The old service directories are retained temporarily as migration references. They are not part of the current Compose stack or monolith build.
 
-Build one service locally without tests:
+## Security And Production Notes
 
-```powershell
-cd alert-service
-mvn clean package -Dmaven.test.skip=true
-```
-
-Run a packaged service:
-
-```powershell
-java -jar target/alert-service-0.0.1-SNAPSHOT.jar
-```
-
-Follow service logs:
-
-```powershell
-docker compose logs -f api-gateway
-docker compose logs -f alert-service notification-service
-```
-
-## Security Notes
-
-- Replace every default password and JWT secret before deployment.
-- Use an SMTP app password rather than a personal email password.
-- Keep `.env` and Kubernetes secret files out of source control.
+- Replace the development `JWT_SECRET` and database password.
+- Use an SMTP app password, not a personal email password.
+- Keep `.env` and secret files out of source control.
 - Use HTTPS and `wss://` outside local development.
-- Add JWT revocation or a token blacklist if logout must invalidate an already-issued token immediately.
-
-## Availability, Consistency, and Trade-offs
-
-TradeAlert favors durable alert state and reliable notification handling while allowing asynchronous delivery between services. This is intentional: a currency alert can tolerate a short processing delay more safely than it can tolerate an incorrect trigger or a silently lost notification.
-
-### Availability choices
-
-| Approach | Availability benefit | Cost or limitation |
-| --- | --- | --- |
-| Primary and secondary rate APIs | A provider outage can be absorbed by failover. | The providers may disagree; the service uses the primary when both return materially different values. |
-| Five-second provider timeout | A slow external API does not block a request indefinitely. | A slow provider may be abandoned while it could eventually have responded. |
-| Kafka topics | Rate and alert events remain decoupled when a consumer is restarting. | Notification delivery is asynchronous and may be delayed by consumer lag. |
-| Redis offline queue | Disconnected users can receive pending alerts after reconnecting. | Redis is an operational dependency; a Redis outage prevents queueing until it recovers. |
-| Redis shared presence | Every notification-service instance can see connections owned by another instance. | Presence is TTL-based; a crashed instance may leave a user marked online until the five-minute key expires. |
-| Docker restart policies and health checks | Failed containers can restart automatically. | Restarting a process does not replace database, broker, or provider high availability. |
-
-### Consistency choices
-
-| Approach | Consistency benefit | Cost or limitation |
-| --- | --- | --- |
-| PostgreSQL for users, alerts, and rates | Alert state and persisted rates survive process restarts and support transactional updates. | Cross-service changes are not one distributed transaction. |
-| Atomic alert claim | A conditional `UPDATE ... WHERE notified = false` lets exactly one concurrent consumer claim an alert. | A failure after claiming and before event publication needs reconciliation or an outbox pattern for stronger guarantees. |
-| Keyed rate events | `currencyPair` pins ticks for the same pair to one Kafka partition, preserving per-pair order. | A hot currency pair can concentrate traffic on one partition. |
-| Kafka consumer groups | Each service has a stable consumption identity and can resume from committed offsets. | The system is eventually consistent: an ingested rate is not visible to notification clients instantly. |
-| Redis queue replay | Pending notifications are replayed in list order and cleared after replay. | Redis queue delivery is not a substitute for a durable audit log or a transactional outbox. |
-| Provider failover without stale fallback | Alerts are never evaluated against an invented or silently stale current rate. | Both providers being down produces `503`, so current-rate availability is sacrificed to protect correctness. |
-
-### Why this balance
-
-The platform separates two kinds of data:
-
-1. **Durable decisions:** users, alert rules, alert state, and ingested rates belong in PostgreSQL.
-2. **Transport and delivery state:** Kafka carries keyed events, while Redis holds sessions, shared presence, and short-lived offline notifications.
-
-This gives Rhema a predictable result: if a provider fails, the service tries another source; if both fail, it reports the outage instead of creating a false trigger; if the alert really triggers, the event is processed independently; and if Rhema is offline, the notification waits for her reconnect.
-
-For stronger production guarantees, the next hardening steps are a transactional outbox between PostgreSQL and Kafka, idempotent notification event IDs, Redis high availability, replicated Kafka, and managed PostgreSQL failover.
+- Restrict WebSocket origins instead of allowing all origins in production.
+- Set `SPRING_JPA_HIBERNATE_DDL_AUTO=validate` after applying a managed schema migration.
+- Add integration tests for registration, verification, scheduled polling, alert claiming, offline queuing, and WebSocket reconnect before retiring the legacy directories.
 
 ## Current Scope
 
-The Docker Compose setup is intended for local development and integration testing. Production deployments should add managed PostgreSQL high availability, Kafka replication, Redis high availability, TLS termination, centralized logs, secret management, and load testing before targeting 100,000 active alerts.
+The Compose setup is intended for local development and integration testing for Rhema and a small alert set. The modular boundaries leave room to scale later: the rate poller, alert evaluation, or notification delivery can be extracted into separate deployables if the workload grows enough to justify that operational complexity.

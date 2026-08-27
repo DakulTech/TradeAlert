@@ -2,79 +2,12 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    cluster: 'tradealert'
-    environment: 'local'
-
-alerting:
-  alertmanagers:
-    - static_configs:
-        - targets: []
-
-rule_files: []
+    cluster: tradealert
+    environment: local
 
 scrape_configs:
-  # User Service Metrics
-  - job_name: 'user-service'
-    metrics_path: '/actuator/prometheus'
+  - job_name: tradealert-app
+    metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['user-service:8080']
+      - targets: [tradealert-app:8080]
     scrape_interval: 10s
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        replacement: 'user-service:8080'
-
-  # Rate Service Metrics
-  - job_name: 'rate-service'
-    metrics_path: '/actuator/prometheus'
-    static_configs:
-      - targets: ['rate-service:8082']
-    scrape_interval: 10s
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        replacement: 'rate-service:8082'
-
-  # Alert Service Metrics
-  - job_name: 'alert-service'
-    metrics_path: '/actuator/prometheus'
-    static_configs:
-      - targets: ['alert-service:8084']
-    scrape_interval: 10s
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        replacement: 'alert-service:8084'
-
-  # Notification Service Metrics
-  - job_name: 'notification-service'
-    metrics_path: '/actuator/prometheus'
-    static_configs:
-      - targets: ['notification-service:8083']
-    scrape_interval: 10s
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        replacement: 'notification-service:8083'
-
-  # Verification Service Metrics
-  - job_name: 'verification-service'
-    metrics_path: '/actuator/prometheus'
-    static_configs:
-      - targets: ['verification-service:8085']
-    scrape_interval: 10s
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        replacement: 'verification-service:8085'
-
-  # API Gateway Metrics
-  - job_name: 'api-gateway'
-    metrics_path: '/actuator/prometheus'
-    static_configs:
-      - targets: ['api-gateway:8081']
-    scrape_interval: 10s
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        replacement: 'api-gateway:8081'

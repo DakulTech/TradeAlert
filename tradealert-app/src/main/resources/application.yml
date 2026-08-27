@@ -1,0 +1,42 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: tradealert-app
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tradealert}
+    username: ${SPRING_DATASOURCE_USERNAME:tradealert}
+    password: ${SPRING_DATASOURCE_PASSWORD:change-me}
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    open-in-view: false
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:25}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+
+jwt:
+  secret: ${JWT_SECRET:change-me-to-a-long-random-secret}
+  expiration: ${JWT_EXPIRATION:86400000}
+
+rateapis:
+  primary-url: ${PRIMARY_RATE_API_URL:https://api.frankfurter.dev/v2}
+  secondary-url: ${SECONDARY_RATE_API_URL:https://api.currencyfreaks.com/v2.0}
+
+rates:
+  currency-pairs: ${RATE_CURRENCY_PAIRS:}
+  polling:
+    interval-ms: ${RATE_POLLING_INTERVAL_MS:300000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
