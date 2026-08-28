@@ -4,6 +4,8 @@ TradeAlert monitors currency exchange rates and notifies Rhema when a configured
 
 ## Architecture
 
+![TradeAlert Architecture](architecture-diagram.png)
+
 ```text
 Client
   |
@@ -379,8 +381,6 @@ TradeAlert/
 |   |-- src/main/resources/application.yml
 |   |-- Dockerfile
 |   `-- pom.xml
-|-- common/                  Kubernetes and API model artifacts retained for reference
-|-- postgres/                Legacy replication scripts, no longer used by Compose
 |-- docker-compose.yml
 |-- prometheus.yml
 `-- .env.example
