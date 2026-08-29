@@ -3,7 +3,7 @@ FROM maven:3.9.6-eclipse-temurin-21 AS builder
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
-RUN mvn -B -ntp clean package -Dmaven.test.skip=true
+RUN mvn -B -ntp -Daether.connector.basic.retryCount=5 clean package -Dmaven.test.skip=true
 
 FROM eclipse-temurin:21-jre-alpine
 
